@@ -60,21 +60,40 @@ module processor(output reg halt, input reset, clk);
     assign pe_live = {`PES{1'b0}};           // TODO PART 2
     assign pe_arithmetic_result = {(`PES*32){1'b0}}; // TODO PART 2
 
-    reg [31:0] PE_dl[0:'PES-1];
-    reg [31:0] PE_iproc[0:'PES-1];
-    reg [31:0] PE_nproc[0:'PES-1];
-    reg PE_live[0:'PES-1];
-
-    //initialize the PE's
+    // Initialize the PE registers
+    reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
     genvar i;
-    generate for (i=0; i<'PES; i=i+1)
-        assign PE_dl = 0;                   // $dl initialized to 0
-        assign PE_iproc[i] = i;             // $iproc is index of PE
-        assign PE_nproc[i] = 'PES;          // $nproc is number of PE
-        assign PE_live[i] = PE_dl[0]==0;    // $live tracks if $dl==0
-        assign pe_live[i] = PE_live[i];     // connect wire to $live
+    generate for (i=0; i<`PES; i=i+1)
 
-    // Still Figuring out how to create/connect operations
+        assign PE_reg[0][i] = 0;                    // $zero $0 initialized to 0
+        assign PE_reg[28][i] = 0;                   // $gp $28 $dl initialized to 0
+        assign PE_reg[29][i] = i;                   // $sp $29 $iproc initialized to i
+        assign PE_reg[30][i] = `PES;                // $fp $30 $nproc initialized to 'PES
+        assign PE_reg[31][i] = PE_reg[28][0]==0;    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
+
+        assign pe_live[i] = PE_reg[31][i];          // connect wire to $live
+
+    // PE operations
+    always @(posedge clk) begin
+        for (i=0; i<`PES; i=i+1)
+            case (ID_special)
+                0: begin                        // normal
+                end
+                1: begin                        // offeq
+                    PE_reg[28][i]=(PE_reg[28][i]?PE_reg[28][i]:(PE_reg[ID_p_src][i]==PE_reg[ID_pt][i]));
+                end
+                2: begin                        // pushen
+                end
+                3: begin                        // popen
+                end
+                4: begin                        // gor
+                end
+                5: begin                        // bcast
+                end
+                6: begin                        // net
+                end
+            endcase
+    end
         
 
     // ================= PART 2 END: PE LOGIC =======================
