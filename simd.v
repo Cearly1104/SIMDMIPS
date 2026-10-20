@@ -59,6 +59,24 @@ module processor(output reg halt, input reset, clk);
     assign pe_rt = {(`PES*32){1'b0}};        // TODO PART 2
     assign pe_live = {`PES{1'b0}};           // TODO PART 2
     assign pe_arithmetic_result = {(`PES*32){1'b0}}; // TODO PART 2
+
+    reg [31:0] PE_dl[0:'PES-1];
+    reg [31:0] PE_iproc[0:'PES-1];
+    reg [31:0] PE_nproc[0:'PES-1];
+    reg PE_live[0:'PES-1];
+
+    //initialize the PE's
+    genvar i;
+    generate for (i=0; i<'PES; i=i+1)
+        assign PE_dl = 0;                   // $dl initialized to 0
+        assign PE_iproc[i] = i;             // $iproc is index of PE
+        assign PE_nproc[i] = 'PES;          // $nproc is number of PE
+        assign PE_live[i] = PE_dl[0]==0;    // $live tracks if $dl==0
+        assign pe_live[i] = PE_live[i];     // connect wire to $live
+
+    // Still Figuring out how to create/connect operations
+        
+
     // ================= PART 2 END: PE LOGIC =======================
 
     // ================= PART 3 BEGIN: COMMUNICATION ================
