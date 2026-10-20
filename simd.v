@@ -62,6 +62,8 @@ module processor(output reg halt, input reset, clk);
 
     // Initialize the PE registers
     reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
+    reg [`PES*32-1:0] EX_dl; //Buffer DL
+
     genvar p;
     generate for (p=0; p<`PES; p=p+1)
 
@@ -82,13 +84,13 @@ module processor(output reg halt, input reset, clk);
                 0: begin                        // normal
                 end
                 1: begin                        // offeq
-                    PE_reg[28][i] = (PE_reg[28][i]?PE_reg[28][i]:ID_ps[i*32 +: 32]==ID_pt[i*32 +: 32]);
+                    EX_dl[i*32+:32] = (PE_reg[28][i]?PE_reg[28][i]:ID_ps[i*32 +: 32]==ID_pt[i*32 +: 32]);
                 end
                 2: begin                        // pushen
-                    PE_reg[28][i] = PE_reg[28][i] + (PE_reg[28][i] != 0);
+                    EX_dl[i*32+:32] = PE_reg[28][i] + (PE_reg[28][i] != 0);
                 end
                 3: begin                        // popen
-                    PE_reg[28][i] = PE_reg[28][i] - (PE_reg[28][i] != 0);
+                    EX_dl[i*32+:32] = PE_reg[28][i] - (PE_reg[28][i] != 0);
                 end
                 4: begin                        // gor
                 end
