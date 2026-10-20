@@ -61,42 +61,56 @@ module processor(output reg halt, input reset, clk);
     assign pe_arithmetic_result = {(`PES*32){1'b0}}; // TODO PART 2
 
     // Initialize the PE registers
-    reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
-    reg [`PES*32-1:0] EX_dl; //Buffer DL
+    initial begin
+        reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
+        reg [`PES*32-1:0] EX_dl; //Buffer DL
+        reg [`PES*32-1:0] EX_live; //Buffer DL
 
-    genvar p;
-    generate for (p=0; p<`PES; p=p+1)
+        for (p=0; p<`PES; p=p+1)
 
-        assign PE_reg[0][p] = 0;                    // $zero $0 initialized to 0
-        assign PE_reg[28][p] = 0;                   // $gp $28 $dl initialized to 0
-        assign PE_reg[29][p] = p;                   // $sp $29 $iproc initialized to p
-        assign PE_reg[30][p] = `PES;                // $fp $30 $nproc initialized to 'PES
-        assign PE_reg[31][p] = PE_reg[28][0]==0;    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
+            assign PE_reg[0][p] = 0;                    // $zero $0 initialized to 0
+            assign PE_reg[28][p] = 0;                   // $gp $28 $dl initialized to 0
+            assign PE_reg[29][p] = p;                   // $sp $29 $iproc initialized to p
+            assign PE_reg[30][p] = `PES;                // $fp $30 $nproc initialized to 'PES
+            assign PE_reg[31][p] = ~|PE_reg[28][0];    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
 
-        assign pe_live[p] = PE_reg[31][p];          // connect wire to $live
-        assign pe_rs[p*32 +: 32] = PE_reg[pe_read_rs][p];
-        assign pe_rt[p*32 +: 32] = PE_reg[pe_read_rt][p];
+            assign pe_live[p] = PE_reg[31][p];          // connect wire to $live
+            assign pe_rs[p*32 +: 32] = PE_reg[pe_read_rs][p];
+            assign pe_rt[p*32 +: 32] = PE_reg[pe_read_rt][p];
+    end
 
     // PE operations
     always @(posedge clk) begin
         for (i=0; i<`PES; i=i+1)
             case (ID_special)
                 0: begin                        // normal
+                    case (ID_ALUOp[3:0])
+                        `ALUAND: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] & ID_p_src[i*32+:32];
+                        `ALUOR: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] | ID_p_src[i*32+:32];
+                        `ALUADD: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] + ID_p_src[i*32+:32];
+                        `ALUSUB: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] - ID_p_src[i*32+:32];
+                        `ALUSLT: pe_arithmetic_result[i*32+:32] = {31'b0,ID_ps[i*32+:32]<ID_p_src[i*32+:32]};
+                        `ALUXOR: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] ^ ID_p_src[i*32+:32];
+                        default: pe_arithmetic_result[i*32+:32] = ID_p_src[i*32+:32]<<16;
+                    endcase
                 end
                 1: begin                        // offeq
-                    EX_dl[i*32+:32] = (PE_reg[28][i]?PE_reg[28][i]:ID_ps[i*32 +: 32]==ID_pt[i*32 +: 32]);
+                    EX_dl[i*32+:32] <= (PE_reg[28][i]?PE_reg[28][i]:(ID_ps[i*32+:32]==ID_pt[i*32+:32]));
+                    EX_live[i*32+:32] <= ~|(PE_reg[28][i]?PE_reg[28][i]:(ID_ps[i*32+:32]==ID_pt[i*32+:32]));
                 end
                 2: begin                        // pushen
-                    EX_dl[i*32+:32] = PE_reg[28][i] + (PE_reg[28][i] != 0);
+                    EX_dl[i*32+:32] <= (PE_reg[28][i] + |PE_reg[28][i]);
+                    EX_live[i*32+:32] <= ~|(PE_reg[28][i] + |PE_reg[28][i]);
                 end
                 3: begin                        // popen
-                    EX_dl[i*32+:32] = PE_reg[28][i] - (PE_reg[28][i] != 0);
+                    EX_dl[i*32+:32] <= (PE_reg[28][i] - |PE_reg[28][i]);
+                    EX_live[i*32+:32] <= ~|(PE_reg[28][i] - |PE_reg[28][i]);
                 end
-                4: begin                        // gor
+                4: begin                        // gor STILL NEEDS DONE
                 end
-                5: begin                        // bcast
+                5: begin                        // bcast STILL NEEDS DONE
                 end
-                6: begin                        // net
+                6: begin                        // net STILL NEEDS DONE
                 end
             endcase
     end
