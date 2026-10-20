@@ -62,16 +62,18 @@ module processor(output reg halt, input reset, clk);
 
     // Initialize the PE registers
     reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
-    genvar i;
-    generate for (i=0; i<`PES; i=i+1)
+    genvar p;
+    generate for (p=0; p<`PES; p=p+1)
 
-        assign PE_reg[0][i] = 0;                    // $zero $0 initialized to 0
-        assign PE_reg[28][i] = 0;                   // $gp $28 $dl initialized to 0
-        assign PE_reg[29][i] = i;                   // $sp $29 $iproc initialized to i
-        assign PE_reg[30][i] = `PES;                // $fp $30 $nproc initialized to 'PES
-        assign PE_reg[31][i] = PE_reg[28][0]==0;    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
+        assign PE_reg[0][p] = 0;                    // $zero $0 initialized to 0
+        assign PE_reg[28][p] = 0;                   // $gp $28 $dl initialized to 0
+        assign PE_reg[29][p] = p;                   // $sp $29 $iproc initialized to p
+        assign PE_reg[30][p] = `PES;                // $fp $30 $nproc initialized to 'PES
+        assign PE_reg[31][p] = PE_reg[28][0]==0;    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
 
-        assign pe_live[i] = PE_reg[31][i];          // connect wire to $live
+        assign pe_live[p] = PE_reg[31][p];          // connect wire to $live
+        assign pe_rs[p*32 +: 32] = PE_reg[pe_read_rs][p];
+        assign pe_rt[p*32 +: 32] = PE_reg[pe_read_rt][p];
 
     // PE operations
     always @(posedge clk) begin
@@ -80,11 +82,13 @@ module processor(output reg halt, input reset, clk);
                 0: begin                        // normal
                 end
                 1: begin                        // offeq
-                    PE_reg[28][i]=(PE_reg[28][i]?PE_reg[28][i]:(PE_reg[ID_p_src][i]==PE_reg[ID_pt][i]));
+                    PE_reg[28][i] = (PE_reg[28][i]?PE_reg[28][i]:ID_ps[i*32 +: 32]==ID_pt[i*32 +: 32]);
                 end
                 2: begin                        // pushen
+                    PE_reg[28][i] = PE_reg[28][i] + (PE_reg[28][i] != 0);
                 end
                 3: begin                        // popen
+                    PE_reg[28][i] = PE_reg[28][i] - (PE_reg[28][i] != 0);
                 end
                 4: begin                        // gor
                 end
