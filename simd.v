@@ -91,17 +91,15 @@ module processor(output reg halt, input reset, clk);
                 // Calculate a candidate; do not change actual PE state here.
                 proposed_dl = PE_reg[28][p];
                 case (ID_special)
-                    1: if (a == t && PE_reg[28][p] == 0)
-                           proposed_dl = 1;                   // offeq
-                    2: if (PE_reg[28][p] != 0)
-                           proposed_dl = PE_reg[28][p] + 1;   // pushen
-                    3: if (PE_reg[28][p] != 0)
-                           proposed_dl = PE_reg[28][p] - 1;   // popen
-                    4: begin // gor — implemented in Part 3
+                    1: proposed_dl = PE_reg[28][p]
+                                     ? PE_reg[28][p] : (a == t); // offeq
+                    2: proposed_dl = PE_reg[28][p] + |PE_reg[28][p]; // pushen
+                    3: proposed_dl = PE_reg[28][p] - |PE_reg[28][p]; // popen
+                    4: begin // gor -- implemented in Part 3
                     end
-                    5: begin // bcast — implemented in Part 3
+                    5: begin // bcast -- implemented in Part 3
                     end
-                    6: begin // net — implemented in Part 3
+                    6: begin // net -- implemented in Part 3
                     end
                     default: begin end
                 endcase
