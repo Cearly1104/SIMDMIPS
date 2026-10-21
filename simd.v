@@ -56,7 +56,7 @@ module processor(output reg halt, input reset, clk);
     wire [`PES*32-1:0] next_dl;
     reg [`PES*32-1:0] EX_dl, MEM_dl;
 
-    // Part 2 is ready; Part 3 communication remains unfinished.
+    // Part 2 is ready; Part 3 communication is ready.
     assign pe_ready = 1'b1;
 
     genvar p;
@@ -141,10 +141,20 @@ module processor(output reg halt, input reset, clk);
     // ================= PART 2 END: PE LOGIC =======================
 
     // ================= PART 3 BEGIN: COMMUNICATION ================
-    // Add communication logic here; replace the placeholders.
-    // The result selector below already connects Parts 2 and 3.
-    assign gor_execute_result = 32'b0;       // TODO PART 3
-    assign pe_communication_result = {(`PES*32){1'b0}}; // TODO PART 3
+    wire [31:0] gor_chain [0:`PES-1];
+    assign gor_chain[0] = ID_ps[31:0];
+    genvar gc;
+    generate for (gc=1; gc<`PES; gc=gc+1) begin: GOR
+        assign gor_chain[gc] = gor_chain[gc-1] | ID_ps[gc*32 +: 32];
+    end endgenerate 
+    assign gor_execute_result = gor_chain[`PES-1];
+
+    genvar cl;
+    generate for (cl=0; cl<`PES; cl=cl+1) begin: COMM
+        wire [31:0] src_pe = ID_ps[cl*32 +: 32] % `PES;
+        assign pe_communication_result[cl*32 +: 32] = 
+            (ID_special==5) ? ID_s : ID_pt[src_pe*32 +: 32];
+    end endgenerate
     // ================= PART 3 END: COMMUNICATION ==================
 
     // PART 1: one result selector
