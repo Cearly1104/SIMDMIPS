@@ -52,70 +52,94 @@ module processor(output reg halt, input reset, clk);
     reg [31:0] EX_alu, EX_t, MEM_v;
 
     // ================= PART 2 BEGIN: PE LOGIC =====================
-    // Add PE logic here using the shared signals; replace the placeholders.
-    // Keep pe_ready low until the instructions being tested are supported.
-    assign pe_ready = 1'b0;                  // TODO PART 2
-    assign pe_rs = {(`PES*32){1'b0}};        // TODO PART 2
-    assign pe_rt = {(`PES*32){1'b0}};        // TODO PART 2
-    assign pe_live = {`PES{1'b0}};           // TODO PART 2
-    assign pe_arithmetic_result = {(`PES*32){1'b0}}; // TODO PART 2
+    reg [31:0] PE_reg[0:31][0:`PES-1];
+    wire [`PES*32-1:0] next_dl;
+    reg [`PES*32-1:0] EX_dl, MEM_dl;
 
-    // Initialize the PE registers
-    initial begin
-        reg [31:0] PE_reg[0:31][0:`PES-1];      // PES PE's have 32 32-bit registers 
-        reg [`PES*32-1:0] EX_dl; //Buffer DL
-        reg [`PES*32-1:0] EX_live; //Buffer DL
+    // Part 2 is ready; Part 3 communication remains unfinished.
+    assign pe_ready = 1'b1;
 
-        for (p=0; p<`PES; p=p+1)
-
-            assign PE_reg[0][p] = 0;                    // $zero $0 initialized to 0
-            assign PE_reg[28][p] = 0;                   // $gp $28 $dl initialized to 0
-            assign PE_reg[29][p] = p;                   // $sp $29 $iproc initialized to p
-            assign PE_reg[30][p] = `PES;                // $fp $30 $nproc initialized to 'PES
-            assign PE_reg[31][p] = ~|PE_reg[28][0];    // $ra $31 $live tracks if $dl==0 (Wasteful using a 32 bit register but should work)
-
-            assign pe_live[p] = PE_reg[31][p];          // connect wire to $live
+    genvar p;
+    generate
+        for (p=0; p<`PES; p=p+1) begin: PE_LOGIC
+            // Raw reads for decode; Part 1 handles forwarding and capture.
             assign pe_rs[p*32 +: 32] = PE_reg[pe_read_rs][p];
             assign pe_rt[p*32 +: 32] = PE_reg[pe_read_rt][p];
-    end
+            assign pe_live[p] = PE_reg[31][p][0];
 
-    // PE operations
+            // Captured, forwarded operands for this PE's EX calculation.
+            wire [31:0] a = ID_ps[p*32 +: 32];
+            wire [31:0] b = ID_p_src[p*32 +: 32];
+            wire [31:0] t = ID_pt[p*32 +: 32];
+            reg [31:0] result, proposed_dl;
+
+            assign pe_arithmetic_result[p*32 +: 32] = result;
+            assign next_dl[p*32 +: 32] = proposed_dl;
+
+            always @* begin
+                case (ID_ALUOp[3:0])
+                    `ALUAND: result = a & b;
+                    `ALUOR:  result = a | b;
+                    `ALUADD: result = a + b;
+                    `ALUSUB: result = a - b;
+                    `ALUSLT: result = {31'b0, (a < b)};
+                    `ALULUI: result = b << 16;
+                    `ALUXOR: result = a ^ b;
+                    default: result = 0;
+                endcase
+
+                // Calculate a candidate; do not change actual PE state here.
+                proposed_dl = PE_reg[28][p];
+                case (ID_special)
+                    1: if (a == t && PE_reg[28][p] == 0)
+                           proposed_dl = 1;                   // offeq
+                    2: if (PE_reg[28][p] != 0)
+                           proposed_dl = PE_reg[28][p] + 1;   // pushen
+                    3: if (PE_reg[28][p] != 0)
+                           proposed_dl = PE_reg[28][p] - 1;   // popen
+                    4: begin // gor — implemented in Part 3
+                    end
+                    5: begin // bcast — implemented in Part 3
+                    end
+                    6: begin // net — implemented in Part 3
+                    end
+                    default: begin end
+                endcase
+            end
+        end
+    endgenerate
+
+    integer regnum, pe;
     always @(posedge clk) begin
-        for (i=0; i<`PES; i=i+1)
-            case (ID_special)
-                0: begin                        // normal
-                    case (ID_ALUOp[3:0])
-                        `ALUAND: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] & ID_p_src[i*32+:32];
-                        `ALUOR: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] | ID_p_src[i*32+:32];
-                        `ALUADD: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] + ID_p_src[i*32+:32];
-                        `ALUSUB: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] - ID_p_src[i*32+:32];
-                        `ALUSLT: pe_arithmetic_result[i*32+:32] = {31'b0,ID_ps[i*32+:32]<ID_p_src[i*32+:32]};
-                        `ALUXOR: pe_arithmetic_result[i*32+:32] = ID_ps[i*32+:32] ^ ID_p_src[i*32+:32];
-                        default: pe_arithmetic_result[i*32+:32] = ID_p_src[i*32+:32]<<16;
-                    endcase
-                end
-                1: begin                        // offeq
-                    EX_dl[i*32+:32] <= (PE_reg[28][i]?PE_reg[28][i]:(ID_ps[i*32+:32]==ID_pt[i*32+:32]));
-                    EX_live[i*32+:32] <= ~|(PE_reg[28][i]?PE_reg[28][i]:(ID_ps[i*32+:32]==ID_pt[i*32+:32]));
-                end
-                2: begin                        // pushen
-                    EX_dl[i*32+:32] <= (PE_reg[28][i] + |PE_reg[28][i]);
-                    EX_live[i*32+:32] <= ~|(PE_reg[28][i] + |PE_reg[28][i]);
-                end
-                3: begin                        // popen
-                    EX_dl[i*32+:32] <= (PE_reg[28][i] - |PE_reg[28][i]);
-                    EX_live[i*32+:32] <= ~|(PE_reg[28][i] - |PE_reg[28][i]);
-                end
-                4: begin                        // gor STILL NEEDS DONE
-                end
-                5: begin                        // bcast STILL NEEDS DONE
-                end
-                6: begin                        // net STILL NEEDS DONE
-                end
-            endcase
-    end
-        
+        if (reset) begin
+            EX_dl <= 0;
+            MEM_dl <= 0;
+            for (regnum=0; regnum<32; regnum=regnum+1)
+                for (pe=0; pe<`PES; pe=pe+1)
+                    PE_reg[regnum][pe] <= 0;
 
+            for (pe=0; pe<`PES; pe=pe+1) begin
+                PE_reg[29][pe] <= pe;
+                PE_reg[30][pe] <= `PES;
+                PE_reg[31][pe] <= 1;
+            end
+        end else if (!halt) begin
+            // Advance candidate enable updates alongside Part 1's pipeline.
+            EX_dl <= next_dl;
+            MEM_dl <= EX_dl;
+
+            for (pe=0; pe<`PES; pe=pe+1) begin
+                if (pe_commit && MEM_mask[pe] && MEM_rd>0 && MEM_rd<28)
+                    PE_reg[MEM_rd][pe] <= MEM_pr[pe*32 +: 32];
+
+                // Enable management also runs for disabled PEs.
+                if (pe_control_commit) begin
+                    PE_reg[28][pe] <= MEM_dl[pe*32 +: 32];
+                    PE_reg[31][pe] <= (MEM_dl[pe*32 +: 32] == 0);
+                end
+            end
+        end
+    end
     // ================= PART 2 END: PE LOGIC =======================
 
     // ================= PART 3 BEGIN: COMMUNICATION ================
