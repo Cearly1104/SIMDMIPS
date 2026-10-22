@@ -1,0 +1,68 @@
+\documentclass[sigconf,nonacm]{acmart}
+\settopmatter{printacmref=false}
+\setcopyright{none}
+\begin{document}
+
+\title{EE 685 Assignment: A SIMD MIPS}
+
+% region: Authors
+
+\author{
+        Coleman P. Earlywine
+}
+\affiliation{%
+        \institution{University of Kentucky}%
+        \department{Department of Electrical and Computer Engineering}%
+        \city{Lexington}%
+        \state{Kentucky}%
+        \country{USA}%
+}
+\email{coleman.earlywine@uky.edu}
+
+\author{
+        Stefan Hustrulid
+}
+\affiliation{%
+        \institution{University of Kentucky}%
+        \department{Department of Electrical and Computer Engineering}%
+        \city{Lexington}%
+        \state{Kentucky}%
+        \country{USA}%
+}
+\email{stefan.hustrulid@uky.edu}
+
+\author{
+        David R. Stewart II
+}
+\affiliation{%
+        \institution{University of Kentucky}%
+        \department{Department of Electrical and Computer Engineering}%
+        \city{Lexington}%
+        \state{Kentucky}%
+        \country{USA}%
+}
+\email{david.stewart@uky.edu}
+
+% endregion
+
+\begin{abstract}
+This project turns the course's five-stage pipelined MIPS into a SIMD machine. The control unit (CU) fetches and decodes every instruction, owns the memory, and runs lw, sw, beq and the MIPS arithmetic. \texttt{`PES} processing elements (PE, default 2) each have 32 registers and an ALU and run the broadcast PE instructions on thier own registers. All instructions in the AIK specification are implemented, and the design was tested with (\texttt{`PES = 2, 4, 8}).
+
+\end{abstract}
+
+\maketitle
+
+\section{General Approach}
+
+\subsection{Pipeline Organization}
+\subsection{Forwarding}
+\subsection{PE State and Enable Logic}
+\subsection{Communication}
+\subsection{Instruction Encoding}
+\subsection{Testing}
+
+% \vfill\pagebreak
+
+\section{Issues}
+
+\end{document}
