@@ -2,6 +2,10 @@
 `define PES 2
 `endif
 
+`ifndef NOTRACE
+`define TRACE
+`endif
+
 // SIMD MIPS: Part 1 complete; Parts 2 and 3 pending.
 // PE p uses [p*32 +: 32]. ID_* feed EX; EX_* feed MEM; MEM_* feed WB.
 // EX results are combinational. ALUOp[4] selects a PE destination.
@@ -393,5 +397,57 @@ endmodule
 // ================= PART 1 END: CU AND PIPELINE ===================
 
 // ================= PART 3 BEGIN: TEAM TEST PROGRAM ================
-// Add the team testbench here after Parts 2 and 3 are ready.
+// Run with: iverilog -o sim simd.v && vvp sim 
+// (add -DPES=x for x PEs)
+`ifndef RUNTIME
+`define RUNTIME 1024
+`endif
+`ifndef CLKDEL
+`define CLKDEL 2
+`endif
+
+module bench;
+wire halt;
+reg reset = 1;
+reg clk = 0;
+integer i;
+
+processor PE(halt, reset, clk);
+
+initial begin
+    for (i=0; i<512; i=i+1) PE.m[i] = 0;
+    PE.m[0]  = 32'h34010007; // ori    $1,$0,7
+    PE.m[1]  = 32'h40220002; // bcast  $1,$2
+    PE.m[2]  = 32'h43a21821; // paddu  $3,$iproc,$2
+    PE.m[3]  = 32'h407d2023; // psubu  $4,$3,$iproc
+    PE.m[4]  = 32'h40622824; // pand   $5,$3,$2
+    PE.m[5]  = 32'h40623025; // por    $6,$3,$2
+    PE.m[6]  = 32'h40623826; // pxor   $7,$3,$2
+    PE.m[7]  = 32'h43be402b; // psltu  $8,$iproc,$nproc
+    PE.m[8]  = 32'h67a9000a; // paddiu $9,$iproc,10
+    PE.m[9]  = 32'h6faa0001; // psltiu $10,$iproc,1
+    PE.m[10] = 32'h706b0001; // pandi  $11,$3,1
+    PE.m[11] = 32'h746c0003; // pori   $12,$3,3
+    PE.m[12] = 32'h7bad0001; // pxori  $13,$iproc,1
+    PE.m[13] = 32'h7c0e0001; // plui   $14,1
+    PE.m[14] = 32'h41a37822; // net    $15,$13,$3
+    PE.m[15] = 32'h40700001; // gor    $3,$16
+    PE.m[16] = 32'h40000004; // pushen
+    PE.m[17] = 32'h41400000; // offeq  $10,$0
+    PE.m[18] = 32'h64110001; // paddiu $17,$0,1
+    PE.m[19] = 32'h40000004; // pushen
+    PE.m[20] = 32'h40000005; // popen
+    PE.m[21] = 32'h64120001; // paddiu $18,$0,1
+    PE.m[22] = 32'h40000005; // popen
+    PE.m[23] = 32'h64130001; // paddiu $19,$0,1
+    PE.m[24] = 32'h00000000; // halt
+    #`CLKDEL clk = 1;
+    #`CLKDEL clk = 0;
+    reset = 0;
+    while (($time < `RUNTIME) && !halt) begin
+        #`CLKDEL clk = 1;
+        #`CLKDEL clk = 0;
+    end
+end
+endmodule
 // ================= PART 3 END: TEAM TEST PROGRAM ==================
