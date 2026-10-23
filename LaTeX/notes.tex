@@ -46,19 +46,53 @@
 % endregion
 
 \begin{abstract}
-This project turns the course's five-stage pipelined MIPS into a SIMD machine. The control unit (CU) fetches and decodes every instruction, owns the memory, and runs lw, sw, beq and the MIPS arithmetic. \texttt{`PES} processing elements (PE, default 2) each have 32 registers and an ALU and run the broadcast PE instructions on thier own registers. All instructions in the AIK specification are implemented, and the design was tested with (\texttt{`PES = 2, 4, 8}).
+This project turns the course's five-stage pipelined MIPS into a SIMD machine. The control unit (CU) fetches and decodes every instruction, owns the memory, and runs lw, sw, beq and the MIPS arithmetic. \texttt{`PES} processing elements (PE) each have 32 registers and an ALU and run the broadcast PE instructions on thier own registers. All instructions in the AIK specification are implemented, and the design was tested with (\texttt{`PES = 2, 4, 8}).
 
 \end{abstract}
 
 \maketitle
 
 \section{General Approach}
+We divided the work into three aprts. Part 1 (Coleman Earlywine) covers the CU, instruction decode, the pipeline registers, branches, hazards, and forwarding. Part 2 (Stefan Hustrulid) covers the PE registers, PE arithmetic, the enable logic, and PE writeback. Part 3 (David Stewart) covers the communication instructions gor, bcast, and net, along with the team test program.
 
 \subsection{Pipeline Organization}
+The pipeline has the five stages fetch, decode, execute, memory, and writeback, with several instructions in different stages at once. The buffers between stages are named for the stage that fills them: the \texttt{ID\_*} buffers hold decode's outputs and feed execute, the \texttt{EX\_*} buffers feed memory, and the \texttt{MEM\_*} buffers feed writeback. Each buffer holds CU values and, alongside them, PE values with one 32-bit slice per PE, where PE~$p$ uses bits \texttt{[p*32 +: 32]}. CU register 5 and PE register 5 are separate locations.
+
+Each instruction carries a flag saying whether its result goes to a CU or a PE register, and the decoder works out separately where its inputs come from. This is what lets \texttt{gor} read the PEs but write the CU, and \texttt{bcast} read the CU but write the PEs. Opcode 0 selects CU register instructions and opcode 16 selects OE register and special instructions. A PE immediate opcode is its CU opcode plus 16, so the decoder subtracts 16 and reuses the CU cases. The ALU control gains a fifth bit that marks a PE destination while the other four bits are the starters ALU codes. The six special instructions are numbered 1 \texttt{offeq}, 2 \texttt{pushen}, 3 \texttt{popen}, 4 \texttt{gor}, 5 \texttt{bcast}, and 6 \texttt{net}. An instruction that writes no register is given destination 0, and PE writes to registers 28-31 are blocked the same way.
+
+The CU ALU is combinational, and the PE results must also be ready before the clock edge. Each piece of state has a single writer, which avoids ordering problems between clocked blocks.
+
 \subsection{Forwarding}
+Decode may need a value that an older instruction has not yet written back. A match requires a real instruction, a nonzero destination, the same register number, and the same bank (CU or PE), so a CU register 5 result is never forwarded into a PE register 5 read or vice versa. For CU values, the newest result wins in the order of excute, memory, then writeback. A load's data is not ready in execute, so an instruction that needs it waits one cycle. Each PE has its own pari of forwarding paths, built with a generate loop. If an older instrcution was disabled in a PE, it will never write that PE's register, so that PE skips it and uses an older value.
+
+There are three reasons to stall: a needed values from a load, PE support not being ready, and a pending \texttt{offeq}, \texttt{pushen}, or \texttt{popen}. For the last case, later SIMD instructions wait until the new enable state is written. During a stall, fetch holds its instruction and decode sends an empty bubble down the pipeline.
+
+\subsection{CU Memory, Branches, and Halting}
+Instructions and CU data share one memory of 512 32-bit words, and a byte address is shifted right by two to find the word. PEs have no load or store access. A \texttt{beq} compares its forwarded values in decode. When the branch is taken, the next sequential instruction is skipped and the target is fetched instead. There is no branch delay slot. An unsupported instruction, such as an all-zero word, stops further fetching and halts the processor when it reaches writeback.
+
 \subsection{PE State and Enable Logic}
+The PE registers are stored as one array
+
+\begin{center}
+\texttt{reg [31:0] PE\_reg[0:31][0:\textasciigrave PES-1]},
+\end{center}
+
+with 32 registers of 32 bits for each PE, where the first index is the register and the second is the PE. On reset, registers 0-28 are set to 0, \texttt{\$iproc} (29) is set to the PE number, \texttt{\$nproc} (30) to \texttt{`PES}, and \texttt{\$live} (31) to 1, since \texttt{\$dl} (28) starts at 0.
+
+In the execute stage, each PE's ALU takes its operation from the saved ALU control and its inputs from its own slices of the saved operands. The results are packed into one wire that carries them to the next stage. The special instructions are identified by their saved number. For \texttt{offeq}, \texttt{pushen}, and \texttt{popen}, each PE computes a proposed new \texttt{\$dl}:
+
+\begin{itemize}
+\item \texttt{offeq}: keep \texttt{\$dl} if it is nonzero; otherwise set it to 1 if the two registers are equal
+\item \texttt{pushen}: add 1 if \texttt{\$dl} is nonzero
+\item \texttt{popen}: subtract 1 if \texttt{\$dl} is nonzero.
+\end{itemize}
+
+The proposed values move through the execute and memory buffers along with their instruction. When the instruction reaches writeback, \texttt{\$dl} and \texttt{\$live} are updated from them in every PE, including disabled ones. Ordinary PE results are written only in PEs that were enabled when the instruction was decoded, and never to the special registers. Coleman added the reset clearing of registers 0-28, the result buffer and its connection to the pipeline, the proposed \texttt{\$dl} signals, and the final \texttt{\$dl}/\texttt{\$live} update.
+
 \subsection{Communication}
+
 \subsection{Instruction Encoding}
+
 \subsection{Testing}
 
 % \vfill\pagebreak
