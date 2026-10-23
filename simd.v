@@ -6,7 +6,6 @@
 `define TRACE
 `endif
 
-// SIMD MIPS: Part 1 complete; Parts 2 and 3 pending.
 // PE p uses [p*32 +: 32]. ID_* feed EX; EX_* feed MEM; MEM_* feed WB.
 // EX results are combinational. ALUOp[4] selects a PE destination.
 // Memory is 512 words; instruction and data addresses are byte addresses.
